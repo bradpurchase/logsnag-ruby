@@ -47,7 +47,6 @@ module LogSnag
     end
 
     def prepare_tags!
-      # TODO: also do this for identify properties
       data[:tags] = data[:tags]&.transform_keys { |key| key.to_s.downcase.gsub("_", "-") }
       Validator.compact_hash!(data, :tags)
     end
