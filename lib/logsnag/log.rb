@@ -34,7 +34,8 @@ module LogSnag
       super(data, config)
 
       append_required_fields!
-      compact_tags!
+      prepare_tags!
+      compact_data!
       validate_data
     end
 
@@ -45,8 +46,14 @@ module LogSnag
       data
     end
 
-    def compact_tags!
+    def prepare_tags!
+      # TODO: also do this for identify properties
+      data[:tags] = data[:tags]&.transform_keys { |key| key.to_s.downcase.gsub("_", "-") }
       Validator.compact_hash!(data, :tags)
+    end
+
+    def compact_data!
+      data.compact!
     end
 
     def validate_data

@@ -142,39 +142,97 @@ RSpec.describe LogSnag do
     end
 
     context "when `tags` are provided in event data" do
+      before do
+        stub_request(:post, "https://api.logsnag.com/v1/log")
+          .with(
+            body: expected_data.to_json,
+            headers: {
+              "Content-Type" => "application/json",
+              "Authorization" => "Bearer 123456"
+            }
+          )
+          .to_return(status: 200, body: mock_response, headers: { "Content-Type" => "application/json" })
+      end
+
       context "when `nil` values are provided" do
         let(:data) do
           {
+            project: described_class.config.project,
             channel: "test",
             event: "test-event",
             tags: { source: "api", status: nil }
           }
         end
 
-        let(:stripped_data) do
+        let(:expected_data) do
           data.dup.tap do |data|
             data[:tags] = data[:tags].compact
-            data[:project] = described_class.config.project
           end
-        end
-
-        before do
-          stub_request(:post, "https://api.logsnag.com/v1/log")
-            .with(
-              body: stripped_data.to_json,
-              headers: {
-                "Content-Type" => "application/json",
-                "Authorization" => "Bearer 123456"
-              }
-            )
-            .to_return(status: 200, body: mock_response, headers: { "Content-Type" => "application/json" })
         end
 
         it "strips `nil` values before sending an event log to LogSnag" do
           result = described_class.log(data)
 
           expect(a_request(:post, "https://api.logsnag.com/v1/log")
-                   .with(body: stripped_data.to_json)).to have_been_made.once
+                   .with(body: expected_data.to_json)).to have_been_made.once
+
+          expect(result.success).to be(true)
+          expect(result.data).to eq({ "message" => "Event logged" })
+          expect(result.error_message).to be_nil
+          expect(result.status_code).to eq(200)
+        end
+      end
+
+      context "when tag keys with underscores are provided in `tags`" do
+        let(:data) do
+          {
+            project: described_class.config.project,
+            channel: "test",
+            event: "test-event",
+            tags: { source: "api", user_id: 1 }
+          }
+        end
+
+        let(:expected_data) do
+          data.dup.tap do |data|
+            data[:tags] = { "source" => "api", "user-id" => 1 }
+          end
+        end
+
+        it "converts tag keys to dash case before sending an event log to LogSnag" do
+          result = described_class.log(data)
+
+          expect(a_request(:post, "https://api.logsnag.com/v1/log")
+                   .with(body: expected_data.to_json)).to have_been_made.once
+
+          expect(result.success).to be(true)
+          expect(result.data).to eq({ "message" => "Event logged" })
+          expect(result.error_message).to be_nil
+          expect(result.status_code).to eq(200)
+        end
+      end
+
+      context "when uppercase tag keys are provided in `tags`" do
+        let(:data) do
+          {
+            project: described_class.config.project,
+            channel: "test",
+            event: "test-event",
+            tags: { Source: "api", user_id: 1 }
+          }
+        end
+
+        let(:expected_data) do
+          data.dup.tap do |data|
+            data[:tags] = { "source" => "api", "user-id" => 1 }
+          end
+        end
+
+        it "converts tag keys to lower case before sending an event log to LogSnag" do
+          result = described_class.log(data)
+
+          expect(a_request(:post, "https://api.logsnag.com/v1/log")
+                   .with(body: expected_data.to_json)).to have_been_made.once
 
           expect(result.success).to be(true)
           expect(result.data).to eq({ "message" => "Event logged" })
