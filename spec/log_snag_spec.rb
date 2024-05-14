@@ -345,9 +345,22 @@ RSpec.describe LogSnag do
     end
 
     context "when `properties` are provided in event data" do
+      before do
+        stub_request(:post, "https://api.logsnag.com/v1/identify")
+          .with(
+            body: stripped_data.to_json,
+            headers: {
+              "Content-Type" => "application/json",
+              "Authorization" => "Bearer 123456"
+            }
+          )
+          .to_return(status: 200, body: mock_response, headers: { "Content-Type" => "application/json" })
+      end
+
       context "when `nil` values are provided" do
         let(:data) do
           {
+            project: described_class.config.project,
             user_id: "test-user-id",
             properties: { name: "test-user-name", plan: nil }
           }
@@ -356,23 +369,38 @@ RSpec.describe LogSnag do
         let(:stripped_data) do
           data.dup.tap do |data|
             data[:properties] = data[:properties].compact
-            data[:project] = described_class.config.project
           end
         end
 
-        before do
-          stub_request(:post, "https://api.logsnag.com/v1/identify")
-            .with(
-              body: stripped_data.to_json,
-              headers: {
-                "Content-Type" => "application/json",
-                "Authorization" => "Bearer 123456"
-              }
-            )
-            .to_return(status: 200, body: mock_response, headers: { "Content-Type" => "application/json" })
+        it "strips `nil` values before sending an 'identify' log to LogSnag" do
+          result = described_class.identify(data)
+
+          expect(a_request(:post, "https://api.logsnag.com/v1/identify")
+                   .with(body: stripped_data.to_json)).to have_been_made.once
+
+          expect(result.success).to be(true)
+          expect(result.data).to eq({ "message" => "Event logged" })
+          expect(result.error_message).to be_nil
+          expect(result.status_code).to eq(200)
+        end
+      end
+
+      context "when properties with underscores are provided" do
+        let(:data) do
+          {
+            project: described_class.config.project,
+            user_id: "test-user-id",
+            properties: { name: "test-user-name", is_active: true }
+          }
         end
 
-        it "strips `nil` values before sending an 'identify' log to LogSnag" do
+        let(:stripped_data) do
+          data.dup.tap do |data|
+            data[:properties] = { "name" => "test-user-name", "is-active" => true }
+          end
+        end
+
+        it "converts properties to dash case before sending an 'identify' log to LogSnag" do
           result = described_class.identify(data)
 
           expect(a_request(:post, "https://api.logsnag.com/v1/identify")

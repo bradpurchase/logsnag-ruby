@@ -24,6 +24,7 @@ module LogSnag
 
       append_required_fields!
       compact_properties!
+      compact_data!
       validate_data
     end
 
@@ -35,7 +36,12 @@ module LogSnag
     end
 
     def compact_properties!
+      data[:properties] = data[:properties]&.transform_keys { |key| key.to_s.downcase.gsub("_", "-") }
       Validator.compact_hash!(data, :properties)
+    end
+
+    def compact_data!
+      data.compact!
     end
 
     def validate_data
